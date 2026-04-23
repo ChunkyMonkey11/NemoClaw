@@ -324,6 +324,7 @@ Customize the Network Policy <network-policy/customize-network-policy>
 Security Best Practices <security/best-practices>
 Credential Storage <security/credential-storage>
 OpenClaw Controls <security/openclaw-controls>
+Config-Set SSRF Hardening <security/config-set-ssrf-hardening>
 ```
 
 ```{toctree}

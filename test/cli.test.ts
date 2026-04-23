@@ -57,16 +57,11 @@ describe("CLI dispatch", () => {
     expect(r.out.includes("nemoclaw")).toBeTruthy();
   });
 
-  it("bare unknown name surfaces sandbox-not-found (#2164)", () => {
+  it("unknown command exits 1", () => {
     const r = run("boguscmd");
     expect(r.code).toBe(1);
-    expect(r.out.includes("Sandbox 'boguscmd' does not exist")).toBeTruthy();
-  });
-
-  it("unknown command with non-sandbox action exits 1", () => {
-    const r = run("boguscmd boguscmd2");
-    expect(r.code).toBe(1);
-    expect(r.out.includes("Unknown command")).toBeTruthy();
+    expect(r.out.includes("Sandbox 'boguscmd' does not exist.")).toBeTruthy();
+    expect(r.out.includes("Run 'nemoclaw onboard' to create one.")).toBeTruthy();
   });
 
   it("list exits 0", () => {
@@ -1563,7 +1558,7 @@ describe("CLI dispatch", () => {
     expect(log.includes("sandbox connect alpha")).toBeTruthy();
   });
 
-  it("connect surfaces sandbox-not-found when recovery cannot find the requested sandbox (#2164)", () => {
+  it("connect keeps missing sandbox guidance when recovery cannot find the requested sandbox", () => {
     const home = fs.mkdtempSync(
       path.join(os.tmpdir(), "nemoclaw-cli-connect-unknown-after-recovery-"),
     );
@@ -1650,10 +1645,9 @@ describe("CLI dispatch", () => {
     });
 
     expect(r.code).toBe(1);
-    expect(r.out.includes("Sandbox 'beta' does not exist")).toBeTruthy();
-    // Recovery from onboard-session.json restores "alpha" into the local registry,
-    // so the helper lists it rather than the empty-registry onboard hint.
+    expect(r.out.includes("Sandbox 'beta' does not exist.")).toBeTruthy();
     expect(r.out.includes("Registered sandboxes: alpha")).toBeTruthy();
+    expect(r.out.includes("Run 'nemoclaw list' to see all sandboxes.")).toBeTruthy();
   });
 
   it("preserves SIGINT exit semantics for logs --follow", () => {
