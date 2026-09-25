@@ -74,8 +74,7 @@ export function pendingSandboxCreateIdentityForBoundary(
     exactFinalHandoffAcknowledged,
     ...priorIdentity
   } = prior;
-  const { state: _identityState, ...identityWithoutState } = identity;
-  const { managedBootstrapIdentity } = identity;
+  const { state: _identityState, managedBootstrapIdentity, ...identityWithoutState } = identity;
   if (
     !isDeepStrictEqual(priorIdentity, identityWithoutState) ||
     (priorManagedBootstrapIdentity !== undefined &&
