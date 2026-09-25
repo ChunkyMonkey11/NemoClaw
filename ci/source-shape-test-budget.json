@@ -2,6 +2,11 @@
   "maxSourceShapeCases": 0,
   "sourceShapeContractExceptions": [
     {
+      "file": "src/commands/url-input-security-contract.test.ts",
+      "test": "route every command URL/config input through the owning security boundary",
+      "category": "security"
+    },
+    {
       "file": "src/lib/readiness/host.test.ts",
       "test": "bounds and redacts successful probe text before schema validation",
       "category": "compatibility"
