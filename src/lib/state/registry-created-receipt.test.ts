@@ -99,6 +99,40 @@ describe("created sandbox identity receipts", () => {
     });
   });
 
+  it("refuses to downgrade a verified create checkpoint", async () => {
+    await withRegistry((registry) => {
+      const { create } = reserveCreate(registry);
+      const verified = managedCheckpoint();
+      registry.recordPendingSandboxCreateIdentity(create, verified);
+
+      expect(() =>
+        registry.recordPendingSandboxCreateIdentity(
+          create,
+          { ...verified, state: "created-unverified" },
+          { expected: verified },
+        ),
+      ).toThrow(/downgrade sandbox 'alpha' create checkpoint/u);
+      expect(registry.getSandbox("alpha")?.pendingCreateIdentity).toEqual(verified);
+    });
+  });
+
+  it("allows verified-to-verified final-handoff checkpoint updates", async () => {
+    await withRegistry((registry) => {
+      const { create } = reserveCreate(registry);
+      const verified = managedCheckpoint();
+      registry.recordPendingSandboxCreateIdentity(create, verified);
+
+      const finalHandoff = {
+        ...verified,
+        exactFinalHandoffCommitStarted: true as const,
+        exactFinalHandoffRuntimeId: "b".repeat(64),
+      };
+      expect(
+        registry.recordPendingSandboxCreateIdentity(create, finalHandoff, { expected: verified }),
+      ).toMatchObject({ pendingCreateIdentity: finalHandoff });
+    });
+  });
+
   it.each([
     ["sandbox identity fingerprint", { sandboxIdentityFingerprint: "b".repeat(64) }],
     ["create-attempt nonce", { createAttemptNonce: "c".repeat(62) }],

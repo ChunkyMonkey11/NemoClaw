@@ -301,6 +301,11 @@ export function recordPendingSandboxCreateIdentity(
           `Cannot replace sandbox '${name}' create checkpoint without exact authority`,
         );
       }
+      if (expected.state === "verified-create" && checkpoint.state === "created-unverified") {
+        throw new Error(
+          `Cannot downgrade sandbox '${name}' create checkpoint to an unverified receipt`,
+        );
+      }
       if (
         expected.state === "created-unverified" &&
         (checkpoint.state !== "verified-create" ||

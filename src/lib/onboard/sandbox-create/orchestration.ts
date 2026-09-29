@@ -3043,6 +3043,7 @@ export function createSandboxWithBaseImageResolution(runtime: SandboxCreateOrche
         sandboxName,
         gatewayName: GATEWAY_NAME,
         gatewayPort: GATEWAY_PORT,
+        ...(openshellGatewayStateDir ? { openshellGatewayStateDir } : {}),
         lifecycleGeneration: createdSandboxLifecycle.generation,
         lifecycleLiveIdentityFingerprint: liveIdentityFingerprint,
         createAttemptNonce,
