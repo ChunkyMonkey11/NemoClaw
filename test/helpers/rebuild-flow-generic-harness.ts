@@ -26,6 +26,7 @@ import {
   hermesProviderAuth,
   installTerminalStepFailureMock,
   listHarnessRebuildBackups,
+  launchReadiness,
   loadRebuildSandbox,
   mcpBridge,
   mcpBridgeProviderInspection,
@@ -39,9 +40,11 @@ import {
   openClawLifecycle,
   openshellRuntime,
   policies,
+  pairingSettlement,
   policyGet,
   policyState,
   portableRetirementAuthority,
+  portableReceiptReadiness,
   processRecovery,
   commandTransport,
   providerCommand,
@@ -366,6 +369,15 @@ export function createRebuildFlowHarness(overrides: RebuildFlowOverrides = {}): 
       : ({ name: sessionAgentName } as never),
   );
   vi.spyOn(agentRuntime, "getAgentDisplayName").mockReturnValue(agentDisplayName);
+  vi.spyOn(portableReceiptReadiness, "classifyPortableLifecycleReceipt").mockReturnValue({
+    kind: "absent",
+  });
+  vi.spyOn(pairingSettlement, "settleOrdinaryOpenClawPairing").mockResolvedValue({
+    kind: "settled",
+  });
+  vi.spyOn(launchReadiness, "settlePortableOpenClawPairing").mockResolvedValue({
+    kind: "not-portable",
+  });
   vi.spyOn(gatewayRuntime, "recoverNamedGatewayRuntime").mockImplementation(
     async (...args: unknown[]) => {
       const gatewayName =
@@ -414,6 +426,8 @@ export function createRebuildFlowHarness(overrides: RebuildFlowOverrides = {}): 
       hermesCredentialKeys = [String(args[2] ?? "OPENAI_API_KEY")];
     });
   vi.spyOn(onboardSession, "loadSession").mockReturnValue(session);
+  vi.spyOn(onboardSession, "loadRebuildSession").mockReturnValue(session);
+  vi.spyOn(onboardSession, "selectRebuildSession").mockImplementation(() => undefined);
   vi.spyOn(onboardSession, "updateSession").mockImplementation((mutator: unknown) => {
     overrides.updateSession?.();
     if (typeof mutator !== "function") {
@@ -945,30 +959,6 @@ export function createRebuildFlowHarness(overrides: RebuildFlowOverrides = {}): 
       },
     }),
   );
-  vi.spyOn(openClawLifecycle, "beginUnregisteredOpenClawPostRestoreDoctor").mockImplementation(
-    async (sandboxName, runtimeSelection) => ({
-      ok: true,
-      window: {
-        sandboxName,
-        ...(runtimeSelection ? { runtimeSelection } : {}),
-      },
-    }),
-  );
-  const runOpenClawPostRestoreDoctorSpy = vi
-    .spyOn(openClawLifecycle, "promoteUnregisteredOpenClawBackupQuiesceToPostRestoreDoctor")
-    .mockImplementation(async (window) => {
-      const result = await (
-        overrides.runOpenClawPostRestoreDoctor ?? (async () => ({ ok: true }) as const)
-      )();
-      if (!result.ok) return result;
-      return {
-        ok: true,
-        window: {
-          sandboxName: window.sandboxName,
-          ...(window.runtimeSelection ? { runtimeSelection: window.runtimeSelection } : {}),
-        },
-      };
-    });
   vi.spyOn(openClawLifecycle, "beginOpenClawBackupQuiesce").mockImplementation(
     async (sandboxName: string, runtimeSelection?: OpenShellRuntimeSelection) => {
       return {
@@ -993,9 +983,9 @@ export function createRebuildFlowHarness(overrides: RebuildFlowOverrides = {}): 
   );
   vi.spyOn(processRecovery, "finishOpenClawPostRestoreDoctor").mockResolvedValue({ ok: true });
   vi.spyOn(processRecovery, "abortOpenClawPostRestoreDoctor").mockResolvedValue({ ok: true });
-  vi.spyOn(openClawLifecycle, "finishUnregisteredOpenClawPostRestoreDoctor").mockResolvedValue({
-    ok: true,
-  });
+  const finishOpenClawMaintenanceWindowSpy = vi
+    .spyOn(openClawLifecycle, "finishUnregisteredOpenClawPostRestoreDoctor")
+    .mockResolvedValue({ ok: true });
   vi.spyOn(openClawLifecycle, "abortUnregisteredOpenClawPostRestoreDoctor").mockResolvedValue({
     ok: true,
   });
@@ -1024,9 +1014,6 @@ export function createRebuildFlowHarness(overrides: RebuildFlowOverrides = {}): 
           forwardRecovered: false,
         })),
     );
-  vi.spyOn(mutableConfigPerms, "repairMutableConfigPerms").mockImplementation(
-    overrides.repairMutableConfigPerms ?? (() => ({ applied: true, verified: true, errors: [] })),
-  );
   vi.spyOn(mutableConfigPerms, "inspectMutableHermesConfigPerms").mockReturnValue({
     verified: true,
     errors: [],
@@ -1134,7 +1121,7 @@ export function createRebuildFlowHarness(overrides: RebuildFlowOverrides = {}): 
     restartSandboxGatewaySpy,
     errorSpy,
     executeSandboxExecCommandSpy,
-    runOpenClawPostRestoreDoctorSpy,
+    finishOpenClawMaintenanceWindowSpy,
     ensureMessagingHostForwardAfterRebuildSpy,
     ensureRebuildAgentBaseImageSpy,
     ensureAgentBaseImageSpy,

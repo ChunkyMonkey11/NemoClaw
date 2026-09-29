@@ -66,6 +66,15 @@ export const portableAgentLifecycle = requireDist(
 );
 export const commandTransport = requireDist("../../adapters/sandbox/command-transport.js");
 export const processRecovery = requireDist("./process-recovery.js");
+export const portableReceiptReadiness = requireDist(
+  "../../onboard/experimental/portable-runtime-receipt-readiness.js",
+) as typeof import("../../src/lib/onboard/experimental/portable-runtime-receipt-readiness");
+export const pairingSettlement = requireDist(
+  "../../onboard/machine/finalization-deps.js",
+) as typeof import("../../src/lib/onboard/machine/finalization-deps");
+export const launchReadiness = requireDist(
+  "./launch-readiness.js",
+) as typeof import("../../src/lib/actions/sandbox/launch-readiness");
 export const openClawLifecycle = requireDist(
   "./runtime/openclaw-lifecycle.js",
 ) as typeof import("../../src/lib/actions/sandbox/runtime/openclaw-lifecycle");
@@ -78,6 +87,9 @@ export const rebuildManagedImage = requireDist("./rebuild-managed-image-prefligh
 export const rebuildMessagingConflict = requireDist("./rebuild-messaging-conflict-preflight.js");
 export const rebuildPreparedImageContext = requireDist("./rebuild-prepared-image-context.js");
 export const rebuildRoutePreflight = requireDist("./rebuild-preflight-guards.js");
+export const rebuildPreflightPhase = requireDist(
+  "./rebuild-preflight-phase.js",
+) as typeof import("../../src/lib/actions/sandbox/rebuild-preflight-phase");
 export const rebuildUsageNotice = requireDist("./rebuild-usage-notice.js");
 export const registry = requireDist("../../state/registry.js");
 export const crossPortRegistry = requireDist("../../state/registry/cross-port.js");

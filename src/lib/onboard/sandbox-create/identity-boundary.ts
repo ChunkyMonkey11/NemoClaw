@@ -56,6 +56,9 @@ export function pendingSandboxCreateIdentityForBoundary(
     state,
     gatewayName: boundary.gatewayName,
     gatewayPort: boundary.gatewayPort,
+    ...(boundary.openshellGatewayStateDir
+      ? { openshellGatewayStateDir: boundary.openshellGatewayStateDir }
+      : {}),
     sandboxName: boundary.sandboxName,
     lifecycleGeneration: boundary.lifecycleGeneration,
     sandboxIdentityFingerprint: boundary.lifecycleLiveIdentityFingerprint,
@@ -112,6 +115,9 @@ export function sandboxCreateBoundaryFromPendingIdentity(
     sandboxName: identity.sandboxName,
     gatewayName: identity.gatewayName,
     gatewayPort: identity.gatewayPort,
+    ...(identity.openshellGatewayStateDir
+      ? { openshellGatewayStateDir: identity.openshellGatewayStateDir }
+      : {}),
     lifecycleGeneration: identity.lifecycleGeneration,
     lifecycleLiveIdentityFingerprint: identity.sandboxIdentityFingerprint,
     ...(identity.createAttemptNonce ? { createAttemptNonce: identity.createAttemptNonce } : {}),

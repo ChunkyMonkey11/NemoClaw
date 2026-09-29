@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+import { captureSandboxFailureDiagnostics } from "../fixtures/sandbox-failure-diagnostics.ts";
 import {
   withPodmanOwnerDiagnostic,
   captureBoundedPodmanOwnerDiagnostic,
@@ -45,6 +46,7 @@ import {
   upsertGenericGatewayProvider,
 } from "../fixtures/gateway-providers.ts";
 import { CLI_ENTRYPOINT } from "../fixtures/paths.ts";
+import { captureOpenClawOnboardFailure } from "../fixtures/openclaw-onboard-diagnostics.ts";
 
 // Disruption-recovery contract — regression for #446.
 //
@@ -486,7 +488,20 @@ test(
         ),
       (environment, phase) => captureBoundedPodmanOwnerDiagnostic(host, environment, phase),
     );
+    await captureSandboxFailureDiagnostics(host, resumeRun, {
+      sandboxName: SANDBOX_NAME,
+      artifactPrefix: "phase-3-resume-failure",
+      redactionValues: [FAKE_COMPATIBLE_AUTH_VALUE],
+      captureGatewayLog: true,
+    });
     const resumeText = `${resumeRun.stdout}\n${resumeRun.stderr}`;
+    await captureOpenClawOnboardFailure(resumeRun, sandbox, {
+      sandboxName: SANDBOX_NAME,
+      artifactPrefix: "phase-3-onboard-resume",
+      env: resumeEnv,
+      redactionValues: [FAKE_COMPATIBLE_AUTH_VALUE, EXTRA_PROVIDER_TOKEN],
+      runtime: runtimeProvider,
+    });
 
     // Assertion: resume-exit-0.
     expect(resumeRun.exitCode, resumeText).toBe(0);
