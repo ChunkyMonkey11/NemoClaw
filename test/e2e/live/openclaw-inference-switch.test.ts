@@ -17,6 +17,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { NVIDIA_HOSTED_NATIVE_ENDPOINT } from "../../../src/lib/inference/native-nvidia/index.ts";
+import { NATIVE_NVIDIA_AUTH_HEADER_SCRIPT } from "../../../src/lib/inference/native-nvidia/contract.ts";
 import { execTimeout, testTimeout } from "../../helpers/timeouts.ts";
 import type { ArtifactSink } from "../fixtures/artifacts.ts";
 import { buildAvailabilityProbeEnv } from "../fixtures/availability-env.ts";
@@ -79,7 +80,6 @@ const INSTALL_TIMEOUT_MS = execTimeout(30 * 60_000);
 const COMMAND_TIMEOUT_MS = 120_000;
 const INFERENCE_TIMEOUT_MS = 150_000;
 const AGENT_TIMEOUT_MS = 150_000;
-const NATIVE_NVIDIA_AUTH_HEADER = "Author" + "ization: Bearer nemoclaw-openshell-provider";
 
 validateSandboxName(SANDBOX_NAME);
 
@@ -225,10 +225,6 @@ async function proveSelectedMockBaselineAuthentication(
     requests,
     `${phase}: explicit verification probe did not reach the authenticated fixture; see ${artifactName}`,
   ).toContainEqual(expectedRequest);
-}
-
-function stripAnsi(value: string): string {
-  return value.replace(/\u001B\[[0-?]*[ -/]*[@-~]/g, "");
 }
 
 function parsePortEnv(name: string, fallback: number): number {
@@ -534,7 +530,7 @@ async function openclawGatewayPid(sandbox: SandboxClient, home: string): Promise
 }
 
 async function getRouteOutput(host: HostCliClient, home: string): Promise<ShellProbeResult> {
-  return runNemoclaw(host, home, ["inference", "get"], {
+  return runNemoclaw(host, home, ["inference", "get", "--json"], {
     artifactName: "nemoclaw-inference-get-after-switch",
     timeoutMs: COMMAND_TIMEOUT_MS,
   });
@@ -617,11 +613,29 @@ async function readAndAssertOpenClawConfig(
     model: string;
     inferenceApi: string;
     artifactName: string;
+    nativeNvidia?: boolean;
   },
 ): Promise<OpenClawModelConfig | undefined> {
   const configResult = await sandbox.exec(
     SANDBOX_NAME,
-    ["cat", "/sandbox/.openclaw/openclaw.json"],
+    expected.nativeNvidia
+      ? [
+          "node",
+          "-e",
+          [
+            'const fs = require("node:fs");',
+            'const config = JSON.parse(fs.readFileSync("/sandbox/.openclaw/openclaw.json", "utf8"));',
+            "const provider = config.models?.providers?.inference;",
+            // A fresh exec receives the newly attached provider handle. Keep
+            // both values inside the sandbox because ShellProbe redacts the
+            // credential-shaped config field before returning stdout.
+            "const handle = process.env.NVIDIA_INFERENCE_API_KEY;",
+            'require("node:assert/strict").ok(/^openshell:resolve:env:(?:v[0-9]{1,20}|s[a-f0-9]{64})_NVIDIA_INFERENCE_API_KEY$/.test(handle ?? "") && provider?.apiKey === handle, "native credential reference mismatch");',
+            "delete provider.apiKey;",
+            "process.stdout.write(JSON.stringify(config));",
+          ].join(" "),
+        ]
+      : ["cat", "/sandbox/.openclaw/openclaw.json"],
     {
       artifactName: expected.artifactName,
       env: commandEnv(home),
@@ -638,13 +652,13 @@ async function readAndAssertOpenClawConfig(
 
   expect(config.agents?.defaults?.model?.primary).toBe(expectedPrimary);
   expect(provider?.baseUrl).toBe(
-    SWITCH_PROVIDER === PUBLIC_NVIDIA_SWITCH_PROVIDER
+    expected.nativeNvidia
       ? NVIDIA_HOSTED_NATIVE_ENDPOINT
       : expected.inferenceApi === "anthropic-messages"
         ? "https://inference.local"
         : "https://inference.local/v1",
   );
-  expect(provider?.apiKey).toBe("unused");
+  expect(provider?.apiKey).toBe(expected.nativeNvidia ? undefined : "unused");
   expect(provider?.api).toBe(expected.inferenceApi);
   expect(selectedModel?.name).toBe(expectedPrimary);
   return selectedModel;
@@ -657,10 +671,15 @@ async function assertOpenClawConfig(
     model: string;
     inferenceApi: string;
     artifactName: string;
+    nativeNvidia?: boolean;
   },
 ): Promise<void> {
   const selectedModel = await readAndAssertOpenClawConfig(sandbox, home, expected);
-  expect(typeof selectedModel?.maxTokens === "number" && selectedModel.maxTokens > 0).toBe(true);
+  expect(
+    expected.inferenceApi === "anthropic-messages"
+      ? typeof selectedModel?.maxTokens === "number" && selectedModel.maxTokens > 0
+      : selectedModel?.maxTokens === undefined,
+  ).toBe(true);
 }
 
 async function assertInitialOpenClawConfig(
@@ -670,6 +689,7 @@ async function assertInitialOpenClawConfig(
     model: string;
     inferenceApi: string;
     artifactName: string;
+    nativeNvidia?: boolean;
   },
 ): Promise<void> {
   const selectedModel = await readAndAssertOpenClawConfig(sandbox, home, expected);
@@ -739,12 +759,15 @@ async function checkSandboxInference(
   const payloadB64 = Buffer.from(JSON.stringify(payload), "utf8").toString("base64");
   const curlCommand =
     SWITCH_PROVIDER === PUBLIC_NVIDIA_SWITCH_PROVIDER
-      ? `curl -sS -o "$tmp" -w '%{http_code}' --max-time 90 ${NVIDIA_HOSTED_NATIVE_ENDPOINT}/chat/completions -H 'Content-Type: application/json' -H '${NATIVE_NVIDIA_AUTH_HEADER}' --data-binary @/tmp/nemoclaw-switch-payload.json`
+      ? `curl -sS -o "$tmp" -w '%{http_code}' --max-time 90 ${NVIDIA_HOSTED_NATIVE_ENDPOINT}/chat/completions -H 'Content-Type: application/json' -H "$AUTH_HEADER" --data-binary @/tmp/nemoclaw-switch-payload.json`
       : SWITCH_INFERENCE_API === "anthropic-messages"
         ? `curl -sS -o "$tmp" -w '%{http_code}' --max-time 90 https://inference.local/v1/messages -H 'Content-Type: application/json' -H 'anthropic-version: 2023-06-01' --data-binary @/tmp/nemoclaw-switch-payload.json`
         : `curl -sS -o "$tmp" -w '%{http_code}' --max-time 90 https://inference.local/v1/chat/completions -H 'Content-Type: application/json' --data-binary @/tmp/nemoclaw-switch-payload.json`;
   const script = [
     "set -u",
+    ...(SWITCH_PROVIDER === PUBLIC_NVIDIA_SWITCH_PROVIDER
+      ? [NATIVE_NVIDIA_AUTH_HEADER_SCRIPT]
+      : []),
     "tmp=$(mktemp)",
     `printf '%s' ${shellQuote(payloadB64)} | base64 -d >/tmp/nemoclaw-switch-payload.json`,
     "set +e",
@@ -1146,12 +1169,16 @@ test(
     });
 
     const useMockBaseline =
-      SWITCH_PROVIDER === "compatible-anthropic-endpoint" && SWITCH_MOCK_ANTHROPIC === "1";
+      SWITCH_PROVIDER === PUBLIC_NVIDIA_SWITCH_PROVIDER ||
+      (SWITCH_PROVIDER === "compatible-anthropic-endpoint" && SWITCH_MOCK_ANTHROPIC === "1");
     // OpenShell reaches this fixture from its gateway network namespace, where
     // the runner's loopback address is not routable.
     const baselineProvider: FakeOpenAiCompatibleServer | undefined = useMockBaseline
       ? await startMockOpenClawBaselineProvider(progress)
       : undefined;
+    cleanup.trackDisposable("close baseline inference provider", async () => {
+      await baselineProvider?.close();
+    });
     const publicApiKey =
       SWITCH_PROVIDER === PUBLIC_NVIDIA_SWITCH_PROVIDER
         ? requirePublicNvidiaSwitchKey(secrets.required("NVIDIA_API_KEY"))
@@ -1176,9 +1203,6 @@ test(
     );
     cleanup.trackDisposable("close switched Anthropic provider", async () => {
       await mockProvider?.close();
-    });
-    cleanup.trackDisposable("close baseline inference provider", async () => {
-      await baselineProvider?.close();
     });
     const customDockerfile = writeCustomOpenClawDockerfile(home);
     cleanup.trackGateway(host, "nemoclaw", {
@@ -1311,13 +1335,14 @@ test(
     progress.phase("inspect route configuration and recorded state");
     const route = await getRouteOutput(host, home);
     expect(route.exitCode, resultText(route)).toBe(0);
-    const plainRoute = stripAnsi(resultText(route));
-    expect(plainRoute).toContain(`Provider: ${SWITCH_PROVIDER}`);
-    expect(plainRoute).toContain(`Model: ${SWITCH_MODEL}`);
+    const routeState = JSON.parse(route.stdout) as { provider?: unknown; model?: unknown };
+    expect(routeState.provider).toBe(SWITCH_PROVIDER);
+    expect(routeState.model).toBe(SWITCH_MODEL);
     await assertOpenClawConfig(sandbox, home, {
       model: SWITCH_MODEL,
       inferenceApi: SWITCH_INFERENCE_API,
       artifactName: "read-openclaw-config-after-inference-switch",
+      nativeNvidia: SWITCH_PROVIDER === PUBLIC_NVIDIA_SWITCH_PROVIDER,
     });
     await assertRegistryAndSession(home, { mockProvider, sandbox });
 
